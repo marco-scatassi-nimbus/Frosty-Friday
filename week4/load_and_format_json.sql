@@ -65,6 +65,8 @@ match_by_column_name = case_insensitive;
 create or replace table db_ff.week4.monarch as
 (
     SELECT 
+        row_number() over (order by t1."Era" desc) as id,
+        row_number() over (partition by t2.value:"House" order by t3.value:"Name" desc) as inter_house_id,
         "Era" AS Era,
         t2.value:"House"::varchar AS House,
         t3.value:"Name"::varchar AS Name,
