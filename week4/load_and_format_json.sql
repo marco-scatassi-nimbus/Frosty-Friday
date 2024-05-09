@@ -13,7 +13,7 @@
 
 
 ----------------------------------------------------------------------
--- DATABASE, SCHEMA AND TABLE CREATION
+-- DATABASE AND SCHEMA CREATION
 ----------------------------------------------------------------------
 create database if not exists db_ff;
 create or replace schema db_ff.week4;
