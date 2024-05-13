@@ -1,0 +1,74 @@
+# Import python packages
+import pandas as pd
+import altair as alt
+import streamlit as st
+from snowflake.snowpark.context import get_active_session
+
+
+# Get the current credentials
+session = get_active_session()
+
+# Set app display 
+st.set_page_config(layout='wide')
+
+@st.cache_data
+def load_data():
+    payments = session.table('DB_FF.WEEK_8.PAYMENTS')
+    return payments.to_pandas()
+
+def get_min_date():
+    payments = load_data()
+    min_date = payments.PAYMENT_DATE.min()
+    return min_date.to_pydatetime()
+
+def get_max_date():
+    payments = load_data()
+    max_date = payments.PAYMENT_DATE.max()
+    return max_date.to_pydatetime()
+
+def payment_history_chart(min_date, max_date):
+    df = load_data().sort_values(by='PAYMENT_DATE')
+    df = df[(df['PAYMENT_DATE']>=min_date) &
+            (df['PAYMENT_DATE']<=max_date)]
+    df['YEAR'] = df['PAYMENT_DATE'].apply(lambda x: x.year)
+    df['WEEK'] = df['PAYMENT_DATE'].apply(lambda x: x.week)
+    
+    df_grouped = df.groupby(by=['YEAR', 'WEEK'])
+    amount_weekly = df_grouped['AMOUNT_SPENT'].sum()
+    date_weekly = df_grouped['PAYMENT_DATE'].min()
+
+    df_to_show = pd.DataFrame({'PAYMENT_DATE': date_weekly
+                              , 'AMOUNT_SPENT': amount_weekly})
+    
+    line_chart = alt.Chart(df_to_show).mark_line(
+            color="lightblue",
+        ).encode(
+            x='PAYMENT_DATE',
+            y='AMOUNT_SPENT',
+        )
+    st.altair_chart(line_chart, use_container_width=True)
+    
+
+
+def display_app():
+    st.title('Payments in 2021')
+
+    min_date = get_min_date()
+    max_date = get_max_date()
+
+    st.slider(label='select min date'
+             , min_value=min_date
+             , max_value=max_date
+             , value=min_date
+             , key="slider_min_date")
+    st.slider(label='select max date'
+             , min_value=min_date
+             , max_value=max_date
+             , value=max_date
+             , key="slider_max_date")
+    payment_history_chart(st.session_state["slider_min_date"]
+                          , st.session_state["slider_max_date"])
+
+
+
+display_app()
