@@ -1,0 +1,111 @@
+-- CHALLENGE
+
+-- With the use of Tags and Masking , we want to mask the first_name and last_name columns from our data_to_be_masked table.
+-- We want the following :
+
+-- The default user that has access can only see the hero_name data unmasked
+-- Role foo1 can only see hero_name and first_name
+-- Role foo2 can see the contents of the whole table
+-- The used masking policy should NOT use a role checking feature. (current_role = … etc.)
+
+use database db_ff;
+create or replace schema db_ff.week9;
+
+use schema week9;
+
+--CREATE DATA
+CREATE OR REPLACE TABLE data_to_be_masked(first_name varchar, last_name varchar,hero_name varchar);
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Eveleen', 'Danzelman','The Quiet Antman');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Harlie', 'Filipowicz','The Yellow Vulture');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Mozes', 'McWhin','The Broken Shaman');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Horatio', 'Hamshere','The Quiet Charmer');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Julianna', 'Pellington','Professor Ancient Spectacle');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Grenville', 'Southouse','Fire Wonder');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Analise', 'Beards','Purple Fighter');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Darnell', 'Bims','Mister Majestic Mothman');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Micky', 'Shillan','Switcher');
+INSERT INTO data_to_be_masked (first_name, last_name, hero_name) VALUES ('Ware', 'Ledstone','Optimo');
+
+--CREATE ROLE
+CREATE OR REPLACE ROLE foo1;
+CREATE OR REPLACE ROLE foo2;
+GRANT ROLE foo1 TO USER marcoScatassi;
+GRANT ROLE foo2 TO USER marcoScatassi;
+
+-- grant permission to roles
+grant usage on database db_ff to role foo1;
+grant usage on database db_ff to role foo2;
+
+grant usage on schema db_ff.week9 to role foo1;
+grant usage on schema db_ff.week9 to role foo2;
+
+grant select on table week9.data_to_be_masked to role foo1;
+grant select on table week9.data_to_be_masked to role foo2;
+
+grant usage, operate on warehouse compute_wh to role foo1;
+grant usage, operate on warehouse compute_wh to role foo2;
+
+
+-- create tag
+create or replace tag hero_visibility_tag
+comment = 'depending on the value hero data are masked';
+
+-- assign tag to roles
+alter role accountadmin set
+    tag hero_visibility_tag = 'third_level';
+
+alter role foo1 set
+    tag hero_visibility_tag = 'second_level';
+
+alter role foo2 set
+    tag hero_visibility_tag = 'first_level';
+
+-- create masking policies
+create or replace masking policy hero_hero_name_masking_policy 
+as (name varchar) returns varchar ->
+case 
+    when SYSTEM$GET_TAG('week9.hero_visibility_tag', current_role(), 'ROLE') in ('first_level', 'second_level', 'third_level') 
+        then name 
+    else '***masked***'
+end;
+
+create or replace masking policy hero_first_name_masking_policy 
+as (name varchar) returns varchar ->
+case 
+    when SYSTEM$GET_TAG('week9.hero_visibility_tag', current_role(), 'ROLE') in ('first_level', 'second_level') 
+        then name 
+    else '***masked***'
+end;
+
+create or replace masking policy hero_last_name_masking_policy 
+as (name varchar) returns varchar ->
+case 
+    when SYSTEM$GET_TAG('week9.hero_visibility_tag', current_role(), 'ROLE') in ('first_level') 
+        then name 
+    else '***masked***'
+end;
+
+
+-- assign masking policies
+alter table week9.data_to_be_masked 
+alter column hero_name 
+set masking policy hero_hero_name_masking_policy;
+
+alter table week9.data_to_be_masked 
+alter column first_name 
+set masking policy hero_first_name_masking_policy;
+
+alter table week9.data_to_be_masked 
+alter column last_name 
+set masking policy hero_last_name_masking_policy;
+
+
+-- check the applied policies
+USE ROLE ACCOUNTADMIN;
+SELECT * FROM db_ff.week9.data_to_be_masked;
+
+USE ROLE foo1;
+SELECT * FROM db_ff.week9.data_to_be_masked;
+
+USE ROLE foo2;
+SELECT * FROM db_ff.week9.data_to_be_masked;
